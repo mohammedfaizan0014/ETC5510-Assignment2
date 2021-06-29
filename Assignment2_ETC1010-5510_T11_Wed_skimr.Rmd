@@ -1,0 +1,395 @@
+---
+title: "Assignment 2"
+author: "T11_Wed_skimr(Hanchen Wang, Hao Li, Jiaying Zhang, Mohammed Faizan, Karan Garg"
+date: "`r format(Sys.Date(), '%A, %B %e %Y')`"
+output:
+  pdf_document: default
+  html_document: default
+subtitle: ETC1010_5510
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, cache.lazy = FALSE, message = FALSE, warning = FALSE )
+```
+
+
+```{r, message = FALSE, warning = FALSE}
+library(naniar)
+library(broom)
+library(ggmap)
+library(knitr)
+library(lubridate)
+library(timeDate)
+library(tsibble)
+library(here)
+library(readr)
+library(tidyverse)
+library(kableExtra)
+library(ggResidpanel)
+library(gridExtra)
+
+```
+
+```{r , readingdata, message = FALSE, warning  = FALSE}
+tree_data0 <- read_csv("Data/Assignment_data.csv") 
+```
+
+
+# Part I
+
+# Question 1: Rename the variables *Date Planted* and *Year Planted* to *Dateplanted* and *Yearplanted* using the *rename()* function. Make sure *Dateplanted* is defined as a **date variable**. Then extract from the variable *Dateplanted* the year and store it in a new variable called  *Year*. Display the first 6 rows of the data frame. (5pts)
+
+
+```{r , eval = TRUE}
+
+tree_data <- as.tibble(tree_data0) %>% rename(Dateplanted=c("Date Planted"), 
+                                   Yearplanted=c("Year Planted")) %>%
+  mutate(Dateplanted = dmy(Dateplanted)) %>%
+  mutate(Year = year(Dateplanted)) 
+head(tree_data) %>%
+  kable(caption = "Tree Data: All Variables") %>% 
+  kable_styling(latex_options = c("scale_down", "hold_position"))
+  
+
+
+```
+
+# Question 2: Have you noticed any differences between the variables *Year* and *Yearplanted*? Why is that? Demonstrate your claims using R code. Fix the problem if there is one (Hint: Use *ifelse* inside a mutate function to fix the problem and store the data in *tree_data_clean*). After this question, please use the data in *tree_data_clean* to proceed. (3pts)
+
+The corresponding values in the variables *Year* and *Yearplanted* are different. The newly created variable *Year* contains the year 2000 in all observations but one(1977). Correct value for the year of tree plantation is present in *Yearplanted*.
+
+This difference is because the original variable, *Date Planted* in tree_data0 has the *Date Planted* as "2/1/00" where the dmy() interprets the year "00" as 2000 and hence for both 1900 and 2000. The year 1977 is mapped correctly owing to the fact that 2077 has not yet arrived. These claims can be seen below.
+
+```{r}
+tree_data %>%
+  select(`CoM ID`, Yearplanted, Dateplanted, Year) %>%
+  filter(`CoM ID` %in% c("1028440", "1058665", "1060068")) %>%
+  kable(caption = "Mismatching Years") %>% 
+  kable_styling(latex_options = c("hold_position"))
+``` 
+
+```{r, eval=TRUE}
+tree_data_clean <- tree_data %>%
+  mutate(Dateplanted = str_replace(as.character(Dateplanted), 
+                                   "2000", as.character(Yearplanted))) %>%
+  mutate(Year = Yearplanted) %>% 
+  mutate(Dateplanted = ymd(Dateplanted))
+```
+
+
+
+# Question 3: Investigate graphically the missing values in the variable *Dateplanted* for the last 1000 rows of the data set. What do you observe? (max 30 words) (2pts)
+
+
+We don't see any missing values in **"Dateplanted"**.
+```{r , eval = TRUE}
+
+tree_data_singlevariable <- tree_data_clean %>%
+  select(Dateplanted) %>% 
+  tail(1000)
+
+vis_miss(tree_data_singlevariable)  
+  
+```
+
+
+# Question 4: What is the proportion of missing values in each variable in the tree data set? Display the results in descending order of the proportion. (2pts)
+
+The missingness in the variables of the tree data set is listed below in decsending order of proportion. 
+
+
+```{r , eval = TRUE}
+miss_var_summary(tree_data_clean) %>%
+  mutate(pct_miss = round(pct_miss/100,3)) %>% 
+  rename(prop_miss = pct_miss) %>% 
+  kable(caption = "Proportion of missing values in each variable") %>%
+  kable_styling(latex_options = "hold_position")
+    
+```
+
+# Question 5: How many observations have a missing value in the variable *Dateplanted*? Identify the rows and display the information in those rows. Remove all the rows in the data set of which the variable *Dateplanted* has a missing value recorded and store the data in *tree_data_clean1*. Display the first 4 rows of *tree_data_clean1*. Use R inline code to complete the sentense below. (6pts)
+
+
+There are `r tree_data_clean%>%filter(is.na(Dateplanted)) %>% count() %>% pull(n)` observations  with missing values in Dateplanted variable.
+
+```{r , eval = TRUE}
+ 
+tree_data_clean %>%
+  filter(is.na(Dateplanted)) %>%
+  kable(caption = "Observations with missing Dateplanted") %>% 
+  kable_styling(latex_options = c("hold_position", "scale_down"))
+  
+```
+
+```{r , eval = TRUE}
+
+tree_data_clean1 <- tree_data_clean %>% 
+  filter(!is.na(Dateplanted)) 
+  head(tree_data_clean1, 4) %>%
+kable(caption = "tree_data_clean1") %>% 
+  kable_styling(latex_options = c("scale_down", "hold_position"))
+```
+
+
+The number of rows in the cleaned data set are `r nrow(tree_data_clean1)`  and the number of columns are `r ncol(tree_data_clean1)`
+
+
+# Question 6: Create a map with the tree locations in the data set. (2pts)
+
+```{r , message = FALSE, warning  = FALSE, eval = TRUE}
+# We have created the map below for you
+melb_map <- read_rds(here::here("Data/melb-map.rds"))
+
+# Here you just need to add the location for each tree into the map.
+ggmap(melb_map) +
+  geom_point(data = tree_data_clean1, 
+             aes(x = Longitude, 
+                 y = Latitude),
+             colour = "#006400", 
+             alpha = 0.6, 
+             size = 0.2)
+```
+
+
+# Question 7: Create another map and draw trees in the *Genus* groups of Eucalyptus, Macadamia, Prunus, Acacia, and Quercus. Use the "Dark2" color palette and display the legend at the bottom of the plot. (8pts)
+
+```{r , eval = TRUE}
+selected_group <- tree_data_clean1 %>%
+  filter(Genus %in% c("Eucalyptus","Macadamia","Prunus","Acacia","Quercus"))
+  
+ 
+```
+
+```{r , message = FALSE, warning = FALSE, eval = TRUE}
+ggmap(melb_map) +
+  geom_point(data = selected_group,
+             aes(x = Longitude, 
+                 y = Latitude,
+                 color = Genus)) +
+  scale_fill_brewer(palette="Dark2") +
+  theme(legend.position = "bottom") +
+  labs(title = "Map of trees belonging to the selected genus group")
+
+             
+```
+
+
+# Question 8: Filter the data *tree_data_clean1* so that only the variables *Year*, *Located in*, and *Common Name* are displayed. Arrange the data set by *Year* in descending order and display the first 4 lines. Call this new data set *tree_data_clean_filter*. Then answer the following question using inline R code: When (*Year*), where (*Located in*) and what tree (*Common Name*) was the first tree planted in Melbourne according to this data set? (8pts)
+
+```{r , eval = TRUE}
+tree_data_clean_filter <- tree_data_clean1 %>%
+ select(Year,`Located in`,`Common Name`) %>% 
+  arrange(-Year) 
+
+
+head(tree_data_clean_filter,4) %>%
+  kable(caption = "Selected Variables of Tree Data") %>%
+  kable_styling(latex_options = "hold_position")
+  
+```
+
+The first tree was planted in `r tree_data_clean_filter[[nrow(tree_data_clean_filter),1]]`  at a `r tree_data_clean_filter[[nrow(tree_data_clean_filter),2]]` and the tree name is `r tree_data_clean_filter[[nrow(tree_data_clean_filter),3]]`
+
+
+# Question 9: How many trees were planted in parks and how many in streets? Tabulate the results (only for locations in parks and streets) using the function *kable()* from the *kableExtra* R package. (3pts)
+
+```{r , eval = TRUE}
+tree_data_clean1 %>%
+  filter(`Located in` %in% c("Park","Street")) %>% 
+  group_by(`Located in`) %>% 
+  summarise(Count = n()) %>% 
+  kable(caption = "Tree Count by Location") %>%
+  kable_styling(latex_options = "hold_position") 
+```
+
+
+# Question 10: How many trees are there in each of the Family groups in the data set *tree_data_clean1* (display the first 5 lines of the results in descending order)? (2pt)
+
+```{r , eval = TRUE}
+tree_data_clean1 %>%
+  group_by(Family) %>% 
+  summarise(`Number of trees` = n()) %>% 
+  arrange(-`Number of trees`) %>% 
+  head(5) %>%
+  kable(caption = "Tree Count by Family") %>%
+  kable_styling(latex_options = "hold_position")
+  
+```
+
+
+
+
+# Question 11: Create a markdown table displaying the number of trees planted in each year (use variable *Yearplanted*) with common names Ironbark, Olive, Plum, Oak, and Elm (Hint: Use kable() from the gridExtra R package). What is the oldest most abundant tree in this group? (8pts)
+
+**Elm** is the oldest most abundant tree in this group.
+
+
+```{r , eval = TRUE}
+tree_data_clean1 %>%
+  filter(`Common Name`
+    %in% c("Ironbark", "Olive", "Plum", "Oak", "Elm")) %>% 
+  group_by(Yearplanted, `Common Name`) %>% 
+    summarise(`number of trees` = n()) %>% 
+    arrange(Yearplanted, desc(`number of trees`)) %>% 
+      knitr::kable(caption="Summary of trees in each year",booktabs = TRUE) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), latex_options = "hold_position")
+  
+```
+
+
+
+# Question 12: Select the trees with diameters (Diameter Breast Height) greater than 40 cm and smaller 100 cm and comment on where the trees are located (streets or parks). (max 25 words) (3pts)
+
+We see that, for the diameters 41 to 56, there are more trees planted on the streets than in parks. Larger trees are prevalent more in parks and their number reduces with diameter.
+
+```{r , eval = TRUE}
+large_trees_data <- tree_data_clean1 %>%
+  filter(`Diameter Breast Height` %in% c(41:99)) %>% 
+  group_by(`Located in`, `Diameter Breast Height`) %>%
+  summarise(`number of trees` = n()) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = `Located in`,
+              values_from = `number of trees`)
+
+```
+
+# Question 13: Plot the trees within the diameter range that you have selected in Question 12, which are located in parks and streets on a map using 2 different colours to differentiate their locations (streets or parks). (6pts)
+
+```{r , eval = TRUE}
+large_trees_data_parks <- tree_data_clean1 %>%
+  filter(`Diameter Breast Height` > 40 & 
+           `Diameter Breast Height` < 100) 
+  
+```  
+
+
+```{r, message = FALSE, warning = FALSE, eval = TRUE}
+ggmap(melb_map) +
+  geom_point(data = large_trees_data_parks , 
+             aes(x = Longitude,
+                 y = Latitude,
+                 color = `Located in`)) +
+  theme(legend.position = "bottom") + 
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Spatial Visualization of Large Trees")
+             
+```
+
+
+
+# Question 14: Create a time series plot (using geom_line) that displays the total number of trees planted per year in the data set *tree_data_clean1* that belong to the Families:  Myrtaceae, Arecaceae, and Ulmaceae. What do you observe from the plot? (6pts)
+
+We see that the number of trees that were planted decreases from 1900 to 2000. More trees belonging to Myrtaceae were planted with one tree uniquely planted in 1977.
+
+
+```{r , eval = TRUE}
+Fig_data <- tree_data_clean1 %>%  
+  filter(`Family` %in% c("Myrtaceae", "Arecaceae", "Ulmaceae")) %>% 
+  group_by(`Yearplanted`, `Family`) %>%
+  summarise(`number of trees` = n()) %>%
+  arrange(desc(`number of trees`)) 
+
+Fig_data %>%
+  ggplot() +
+  geom_line(mapping = aes(x = `Yearplanted`, y = `number of trees`, colour = `Family`)) +
+  geom_point(mapping = aes(x = `Yearplanted`, y = `number of trees`, colour = `Family`))+
+  theme(legend.position = "bottom") +
+  theme_bw() +
+  labs(title = "Year Planted vs Number of Trees") 
+  
+```
+
+
+# Part 2: Simulation Exercise
+
+
+#  Question 15: Create a data frame called *simulation_data* that contains 2 variables with names *response* and *covariate*. Generate the variables according to the following model: $response = 3.5 \times covariate + epsilon$ where *covariate* is a variable that takes values $0, 1, 2, \ldots, 100$ and $\epsilon$ is generated according to a Normal distribution (Hint: Use the function *rnorm()* to generate $epsilon$.) (3pts)
+
+
+```{r , eval = TRUE}
+set.seed(2021)
+
+simulation_data <- tibble(covariate = 0:100) %>%
+                            mutate(response = 3.5 * covariate + rnorm(101, 0, 1))
+
+```
+
+
+# Question 16: Display graphically the relationship between the variables *response* and *covariate* (1pt) using a point plot. Which kind of relationship do you observe? (2pts)
+
+We observe a linear relationship where the response variable increases with the covariate. 
+
+
+```{r,eval=TRUE}
+simulation_data %>%
+  ggplot() +
+  geom_point(mapping = aes(x = `covariate`, 
+                           y = `response`),
+             colour = "red") +
+  theme_bw() +
+  labs(title = "Covariate vs Response")
+  
+```
+
+
+# Question 17: Fit a linear model between the variables *response* and *covariate* that you generate in Question 15 and display the model summary. (2pts)
+
+```{r, eval=TRUE}
+simulation_data_lm <- lm(response~covariate, data=simulation_data)
+summary(simulation_data_lm)
+```
+
+
+# Question 18: What are the values for the intercept and the slope in the estimated model in Question 17 (Hint: Use the function *coef()*)? How do these values compare with the values in the simulation model? (max 50 words) (2pts)
+
+```{r}
+#coef(summary(simulation_data_lm))
+slope_intercept <- tidy(summary(simulation_data_lm)) %>% 
+  select(term, estimate) 
+```
+The generated model has a slope of `r round(slope_intercept$estimate[2], 2)` and an intercept of `r round(slope_intercept$estimate[1], 2)`
+
+The simulation data was generated from the equation, $response = 3.5 \times covariate + epsilon$  where epsilon is an error factor. The generated linear model is of the form  $response = 3.4937754 \times covariate + 0.1358957$. The value 3.49 ~ 3.5 is the slope of the linear equation and the intercept of the model is 0.14. The fitted model differs from the simulation data in epsilon, which is centered around zero. The intercept of the model is close to zero.
+
+```{r}
+#coef(summary(simulation_data_lm))
+slope_intercept %>%
+  kable(caption = "Slope and Intercept")%>%
+  kable_styling(latex_options = "hold_position")
+```
+
+
+# Question 19: Create a figure to display the diagnostic plots of the linear model that you fit in Question 17. Comment on the diagnostic plots (max 50 words). Is this a good/bad model and why? (max 30 words) (4pts)
+
+
+- The Residual plot is a scatter plot of predicted values vs residuals. Residual is the difference between actual values and the predicted values. For a good model, the residuals ~ 0. The residual plot for a model having randomly dispersed points suggests that the model is good.
+
+- the Response vs Predicted plot is a scatter plot. A good model will have points aligned such that predicted values ~ response.
+
+- The plots in the second row show the distribution of the residuals. A good model has a normal distribution of residuals centered around 0.
+
+
+```{r, eval=TRUE}
+resid_panel(simulation_data_lm, plots = "all")
+```
+The plots below show the goodness of fit of the model representing the simulation data. The residual plot has points scattered indefinitely, the response vs predicted plot is a straight line(slope  = 1, response ~ predicted), showing that it is a well fitted model. The residuals lie within (-1,1) with a median of 0 suggesting goodness of the model.
+
+
+# Question 20: Report R2, Radjusted, AIC, and BIC. Is this a good/bad model? Please explain your answer. (max 30 words) (2pts)
+
+The model generated for the simulation data is a good model.
+
+```{r,eval=TRUE}
+glance(simulation_data_lm) %>% 
+  select(r.squared, adj.r.squared, AIC, BIC) %>%
+  kable(caption = "Measures of Goodness of Fit")%>%
+  kable_styling(latex_options = "hold_position")
+```
+
+The generated model has an R2 and Radjusted of 0.9999, and hence is a good model. The model with lowest AIC and BIC is a good model. For this model, the AIC and BIC are comparable and have low values.
+
+
+
+
+
+
